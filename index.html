@@ -1,0 +1,350 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Investment Monitor Dashboard</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Investment Monitor</p>
+        <h1>Investment Dashboard <small>แดชบอร์ดพอร์ตลงทุน</small></h1>
+      </div>
+      <div class="topbar-actions">
+        <span class="sync-status" id="sheetSyncStatus" aria-live="polite">Sheet sync ready</span>
+        <button class="secondary-button" id="loadSheetButton" type="button">Load Sheet <small>โหลดจากชีต</small></button>
+        <button class="secondary-button" id="saveSheetButton" type="button">Save Sheet <small>บันทึกลงชีต</small></button>
+        <button class="secondary-button" id="exportBackupButton" type="button">Export Backup <small>สำรองข้อมูล</small></button>
+        <button class="secondary-button" id="importBackupButton" type="button">Import Backup <small>กู้คืนข้อมูล</small></button>
+        <input id="backupFileInput" type="file" accept="application/json,.json" hidden />
+        <button class="primary-button" id="addHoldingButton" type="button">Add Asset <small>เพิ่มสินทรัพย์</small></button>
+      </div>
+    </header>
+
+    <main class="dashboard-shell">
+      <nav class="dashboard-tabs" aria-label="View selector">
+        <button class="active" data-tab="dashboard" type="button">Dashboard <small>แดชบอร์ด</small></button>
+        <button data-tab="history" type="button">Investment History <small>ประวัติการลงทุน</small></button>
+        <button data-tab="income" type="button">Income <small>ปันผล/ดอกเบี้ย</small></button>
+        <button data-tab="btc" type="button">BTC Transactions <small>ประวัติ BTC</small></button>
+        <button data-tab="gold" type="button">Gold Transactions <small>ประวัติทอง</small></button>
+      </nav>
+
+      <div class="tab-panel active" id="dashboardTab">
+        <section class="summary-grid" aria-label="Portfolio summary">
+          <article class="metric-card">
+            <span>Portfolio Value <small>มูลค่าพอร์ตรวม</small></span>
+            <strong id="totalValue">฿0</strong>
+            <small id="totalCost">Investment cost <span class="th-inline">ต้นทุน</span> ฿0</small>
+          </article>
+          <article class="metric-card">
+            <span>Total Gain / Loss <small>กำไร/ขาดทุนรวม</small></span>
+            <strong id="totalReturn">฿0</strong>
+            <small id="totalReturnPct">Including received income 0.00%</small>
+          </article>
+          <article class="metric-card">
+            <span>Income Received <small>ปันผล/ดอกเบี้ยที่ได้รับ</small></span>
+            <strong id="receivedIncome">฿0</strong>
+            <small id="receivedIncomeHint">Net after tax</small>
+          </article>
+          <article class="metric-card">
+            <span>Annual Dividend <small>เงินปันผลต่อปี</small></span>
+            <strong id="annualDividend">฿0</strong>
+            <small id="dividendYield">Yield 0.00%</small>
+          </article>
+          <article class="metric-card">
+            <span>Best Yield Performance <small>ผลตอบแทนปันผลดีที่สุด</small></span>
+            <strong id="yieldPerformance">0.00%</strong>
+            <small id="yieldPerformanceHint">Dividend-paying assets only</small>
+          </article>
+        </section>
+
+        <section class="content-grid">
+          <article class="panel allocation-panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Allocation</p>
+                <h2>Asset Allocation <small>สัดส่วนสินทรัพย์</small></h2>
+              </div>
+              <span id="lastUpdated">Updated <span class="th-inline">อัปเดต</span></span>
+            </div>
+            <div class="allocation-layout">
+              <div class="donut" id="allocationDonut" role="img" aria-label="Asset allocation chart"></div>
+              <div class="legend" id="allocationLegend"></div>
+            </div>
+          </article>
+
+          <article class="panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Performance</p>
+                <h2>Best Asset Performer <small>สินทรัพย์ที่ทำผลงานดีที่สุด</small></h2>
+              </div>
+            </div>
+            <div class="performer-card" id="bestPerformer"></div>
+          </article>
+        </section>
+
+        <section class="content-grid wide-left">
+          <article class="panel holdings-panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Portfolio</p>
+                <h2>Asset List <small>รายการสินทรัพย์</small></h2>
+              </div>
+              <div class="segmented-control" aria-label="Asset type filter">
+                <button class="active" data-filter="all" type="button">All <small>ทั้งหมด</small></button>
+                <button data-filter="stock" type="button">Stock <small>หุ้น</small></button>
+                <button data-filter="fund" type="button">Fund <small>กองทุน</small></button>
+                <button data-filter="cash" type="button">Cash <small>เงินสด</small></button>
+                <button data-filter="crypto" type="button">Crypto <small>คริปโต</small></button>
+                <button data-filter="gold" type="button">Gold <small>ทอง</small></button>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Name <small>ชื่อ</small></th>
+                    <th>Type <small>ประเภท</small></th>
+                    <th>Units <small>จำนวน</small></th>
+                    <th>Avg Cost <small>ต้นทุนเฉลี่ย</small></th>
+                    <th>Cost <small>ต้นทุน</small></th>
+                    <th>Current Price <small>ราคาปัจจุบัน</small></th>
+                    <th>Value <small>มูลค่า</small></th>
+                    <th>Income <small>รายรับ</small></th>
+                    <th>Return <small>ผลตอบแทน</small></th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="holdingsTable"></tbody>
+              </table>
+            </div>
+          </article>
+
+          <aside class="panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Growth</p>
+                <h2>Portfolio Growth <small>การเติบโตของพอร์ต</small></h2>
+              </div>
+            </div>
+            <div class="growth-list" id="portfolioGrowth"></div>
+          </aside>
+        </section>
+      </div>
+
+      <section class="tab-panel" id="historyTab">
+        <article class="panel history-panel">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">History</p>
+              <h2>Investment History <small>ประวัติการลงทุน</small></h2>
+            </div>
+          </div>
+          <div class="history-summary">
+            <div class="panel-heading compact-heading">
+              <div>
+                <p class="eyebrow">Annual</p>
+                <h3>Annual Investment Data <small>ข้อมูลการลงทุนประจำปี</small></h3>
+              </div>
+              <button class="primary-button compact-button" id="addAnnualYearButton" type="button">Add Year <small>เพิ่มปี</small></button>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Year <small>ปี</small></th>
+                    <th>Start Value <small>มูลค่า ณ ต้นปี</small></th>
+                    <th>End Value <small>มูลค่า ณ สิ้นปี</small></th>
+                    <th>Net Growth <small>เติบโตสุทธิ</small></th>
+                    <th>YoY Change <small>เทียบปีก่อน</small></th>
+                    <th>Note <small>หมายเหตุ</small></th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="annualHistoryTable"></tbody>
+              </table>
+            </div>
+          </div>
+          <div class="panel-heading compact-heading">
+            <div>
+              <p class="eyebrow">Chart</p>
+              <h3>Portfolio Growth <small>การเติบโตของพอร์ต</small></h3>
+            </div>
+          </div>
+          <div class="annual-chart" id="annualInvestmentChart"></div>
+        </article>
+      </section>
+
+      <section class="tab-panel" id="incomeTab">
+        <article class="panel history-panel">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">Income</p>
+              <h2>Dividend & Interest <small>ปันผลและดอกเบี้ยที่ได้รับจริง</small></h2>
+            </div>
+            <button class="primary-button compact-button" id="addIncomeButton" type="button">Add Income <small>เพิ่มรายรับ</small></button>
+          </div>
+          <section class="summary-grid compact-summary" aria-label="Income summary">
+            <article class="metric-card">
+              <span>Net Received <small>รับสุทธิ</small></span>
+              <strong id="incomeNetTotal">฿0</strong>
+              <small>Used in total return</small>
+            </article>
+            <article class="metric-card">
+              <span>Withholding Tax <small>ภาษีหัก ณ ที่จ่าย</small></span>
+              <strong id="incomeTaxTotal">฿0</strong>
+              <small id="incomeGrossTotal">Gross ฿0</small>
+            </article>
+          </section>
+          <div class="table-wrap">
+            <table class="income-table">
+              <thead>
+                <tr>
+                  <th>Date <small>วันที่</small></th>
+                  <th>Asset <small>สินทรัพย์</small></th>
+                  <th>Type <small>ประเภท</small></th>
+                  <th>Gross <small>ยอดก่อนภาษี</small></th>
+                  <th>Tax <small>ภาษี</small></th>
+                  <th>Net Received <small>รับสุทธิ</small></th>
+                  <th>Note <small>หมายเหตุ</small></th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="incomeTransactionsTable"></tbody>
+            </table>
+          </div>
+        </article>
+      </section>
+
+      <section class="tab-panel" id="btcTab">
+        <article class="panel history-panel">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">Bitcoin</p>
+              <h2>BTC Transactions <small>ประวัติการซื้อขาย BTC</small></h2>
+            </div>
+            <button class="primary-button compact-button" id="addBtcTransactionButton" type="button">Add Transaction <small>เพิ่มรายการ</small></button>
+          </div>
+          <section class="summary-grid compact-summary" aria-label="BTC summary">
+            <article class="metric-card">
+              <span>Avg Cost <small>ต้นทุนเฉลี่ย</small></span>
+              <strong id="btcAvgCost">฿0</strong>
+              <small>Weighted average cost</small>
+            </article>
+            <article class="metric-card">
+              <span>BTC Balance <small>คงเหลือ BTC</small></span>
+              <strong id="btcBalance">0</strong>
+              <small id="btcTotalCost">Total cost ฿0</small>
+            </article>
+          </section>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Date <small>วันที่</small></th>
+                  <th>Buy / Sell <small>ซื้อ / ขาย</small></th>
+                  <th>Units <small>จำนวน</small></th>
+                  <th>Price <small>ราคา</small></th>
+                  <th>Value <small>มูลค่า</small></th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="btcTransactionsTable"></tbody>
+            </table>
+          </div>
+        </article>
+      </section>
+
+      <section class="tab-panel" id="goldTab">
+        <article class="panel history-panel">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">Gold</p>
+              <h2>Gold Transactions <small>ประวัติการซื้อขายทอง</small></h2>
+            </div>
+            <button class="primary-button compact-button" id="addGoldTransactionButton" type="button">Add Transaction <small>เพิ่มรายการ</small></button>
+          </div>
+          <section class="summary-grid compact-summary" aria-label="Gold summary">
+            <article class="metric-card">
+              <span>Avg Cost <small>ต้นทุนเฉลี่ย</small></span>
+              <strong id="goldAvgCost">฿0</strong>
+              <small>Weighted average cost</small>
+            </article>
+            <article class="metric-card">
+              <span>Gold Balance <small>คงเหลือทอง</small></span>
+              <strong id="goldBalance">0.0000000</strong>
+              <small id="goldTotalCost">Total cost ฿0</small>
+            </article>
+          </section>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Date <small>วันที่</small></th>
+                  <th>Buy / Sell <small>ซื้อ / ขาย</small></th>
+                  <th>Units <small>จำนวน</small></th>
+                  <th>Price <small>ราคา</small></th>
+                  <th>Value <small>มูลค่า</small></th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="goldTransactionsTable"></tbody>
+            </table>
+          </div>
+        </article>
+      </section>
+    </main>
+
+    <dialog id="holdingDialog">
+      <form method="dialog" class="holding-form" id="holdingForm">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow" id="holdingDialogMode">New Asset</p>
+            <h2 id="holdingDialogTitle">Add Asset <small>เพิ่มสินทรัพย์</small></h2>
+          </div>
+          <button class="icon-button" id="closeHoldingDialogButton" type="button" title="Close">×</button>
+        </div>
+        <label>
+          <span>Asset Name <small>ชื่อสินทรัพย์</small></span>
+          <input id="assetName" name="name" required placeholder="e.g. AAPL, SET50, Cash, Gold" />
+        </label>
+        <label>
+          <span>Type <small>ประเภท</small></span>
+          <select id="assetType" name="type">
+            <option value="stock">Stock / หุ้น</option>
+            <option value="fund">Fund / กองทุน</option>
+            <option value="bond">Bond / ตราสารหนี้</option>
+            <option value="cash">Cash / เงินสด</option>
+            <option value="crypto">Crypto / คริปโต</option>
+            <option value="gold">Gold / ทอง</option>
+          </select>
+        </label>
+        <div class="form-grid">
+          <label id="assetUnitsField">
+            <span>Units <small>จำนวน</small></span>
+            <input id="assetUnits" name="units" required type="number" min="0" step="0.0000001" />
+          </label>
+          <label id="assetCostField">
+            <span>Average Cost <small>ต้นทุนเฉลี่ย</small></span>
+            <input id="assetCost" name="avgCost" required type="number" min="0" step="0.01" />
+          </label>
+          <label id="assetPriceField">
+            <span id="assetPriceLabel">Current Price <small>ราคาปัจจุบัน</small></span>
+            <input id="assetPrice" name="currentPrice" required type="number" min="0" step="0.01" />
+          </label>
+          <label id="assetDividendField">
+            <span>Annual Dividend <small>ปันผล/ปี</small></span>
+            <input id="assetDividend" name="annualDividend" type="number" min="0" step="0.01" value="0" />
+          </label>
+        </div>
+        <button class="primary-button" id="holdingSubmitButton" value="default" type="submit">Save <small>บันทึก</small></button>
+      </form>
+    </dialog>
+
+    <script src="app.js"></script>
+  </body>
+</html>
